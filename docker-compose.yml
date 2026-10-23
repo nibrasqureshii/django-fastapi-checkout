@@ -1,0 +1,42 @@
+# One-command local stack: Postgres + Django shop + FastAPI gateway.
+# Dev-only credentials below are placeholders; never reuse them anywhere real.
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: shop
+      POSTGRES_PASSWORD: shop-dev-only
+      POSTGRES_DB: ticket_checkout
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shop"]
+      interval: 5s
+      retries: 10
+
+  gateway:
+    image: python:3.12-slim
+    working_dir: /app
+    volumes: ["./gateway:/app"]
+    command: sh -c "pip install -q -r requirements.txt && uvicorn app.main:app --host 0.0.0.0 --port 8100"
+    environment:
+      GATEWAY_API_KEY: dev-gateway-key
+      WEBHOOK_SECRET: dev-webhook-secret
+      MERCHANT_WEBHOOK_URL: http://shop:8000/api/webhooks/gateway/
+      GATEWAY_PUBLIC_URL: http://localhost:8100
+    ports: ["8100:8100"]
+
+  shop:
+    image: python:3.12-slim
+    working_dir: /app
+    volumes: ["./shop:/app"]
+    command: sh -c "pip install -q -r requirements.txt && python manage.py migrate && python manage.py seed_demo && python manage.py runserver 0.0.0.0:8000"
+    environment:
+      DJANGO_DEBUG: "1"
+      DATABASE_URL: postgres://shop:shop-dev-only@db:5432/ticket_checkout
+      GATEWAY_URL: http://gateway:8100
+      GATEWAY_API_KEY: dev-gateway-key
+      WEBHOOK_SECRET: dev-webhook-secret
+      SITE_URL: http://localhost:8000
+    ports: ["8000:8000"]
+    depends_on:
+      db: { condition: service_healthy }
+      gateway: { condition: service_started }

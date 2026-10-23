@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Checkout demo · Resumable 3D Secure</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #050807; --fg: #e8fff1; --muted: #9fb8a9; --accent: #39ff88; --on-accent: #03140a;
+      --card: rgba(57, 255, 136, 0.045); --border: rgba(57, 255, 136, 0.16); --danger: #fca5a5;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: "DM Sans", system-ui, sans-serif; color: var(--fg); min-height: 100vh;
+      background: radial-gradient(60vw 60vw at 0% 0%, #0f5132 0%, transparent 60%),
+                  radial-gradient(50vw 50vw at 100% 30%, #15803d55 0%, transparent 60%), var(--bg);
+    }
+    header { border-bottom: 1px solid var(--border); backdrop-filter: blur(16px); position: sticky; top: 0; background: rgba(5, 8, 7, .7); }
+    .bar { max-width: 960px; margin: 0 auto; height: 64px; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; }
+    .brand { display: flex; align-items: center; gap: 12px; font-weight: 600; }
+    .mark { width: 34px; height: 34px; border-radius: 10px; background: var(--fg); color: var(--bg); display: grid; place-items: center; font-size: 13px; }
+    .brand small { display: block; color: var(--muted); font-weight: 400; font-size: 12px; }
+    nav a { color: var(--muted); text-decoration: none; font-size: 14px; margin-left: 24px; }
+    nav a:hover { color: var(--fg); }
+    main { max-width: 960px; margin: 0 auto; padding: 48px 20px 80px; }
+    .eyebrow { font-family: "JetBrains Mono", monospace; font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--accent); }
+    h1 { font-size: clamp(28px, 4vw, 40px); letter-spacing: -.02em; margin: 10px 0 6px; }
+    .lead { color: var(--muted); margin: 0 0 32px; max-width: 60ch; }
+    .grid { display: grid; gap: 20px; grid-template-columns: 1.4fr 1fr; }
+    @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } nav { display: none; } }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 22px; padding: 24px; backdrop-filter: blur(16px); }
+    .stage { text-align: center; font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--muted); letter-spacing: .2em; padding: 8px; border: 1px dashed var(--border); border-radius: 10px; margin-bottom: 18px; }
+    .seats { display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px; }
+    .seat { aspect-ratio: 1; border-radius: 9px; border: 1px solid var(--border); background: transparent; color: var(--fg); font: 500 11px "JetBrains Mono", monospace; cursor: pointer; transition: transform .15s, background .2s; }
+    .seat:hover:not(:disabled) { transform: translateY(-2px); }
+    .seat[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+    .seat:disabled { opacity: .3; cursor: not-allowed; text-decoration: line-through; }
+    label { font-size: 13px; color: var(--muted); display: block; margin: 16px 0 6px; }
+    input, select { width: 100%; height: 44px; border-radius: 12px; border: 1px solid var(--border); background: rgba(0,0,0,.25); color: var(--fg); padding: 0 12px; font: inherit; }
+    input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .btn { width: 100%; height: 48px; margin-top: 18px; border: 0; border-radius: 999px; background: var(--fg); color: var(--bg); font: 600 15px "DM Sans", sans-serif; cursor: pointer; }
+    .btn:disabled { opacity: .5; cursor: progress; }
+    .row { display: flex; justify-content: space-between; font-size: 14px; padding: 6px 0; }
+    .muted { color: var(--muted); }
+    .status { font-family: "JetBrains Mono", monospace; font-size: 13px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); margin-top: 16px; }
+    .status.ok { color: var(--accent); } .status.err { color: var(--danger); border-color: #7f1d1d; }
+    ol.log { font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--muted); padding-left: 18px; max-height: 180px; overflow: auto; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="bar">
+      <div class="brand"><span class="mark">NQ</span><span>Checkout demo<small>Django + FastAPI</small></span></div>
+      <nav aria-label="Primary"><a href="/">Checkout</a><a href="/admin/">Admin</a><a href="https://github.com/nibrasqureshii" rel="noopener">GitHub</a></nav>
+    </div>
+  </header>
+  <main>
+    <p class="eyebrow">Resumable 3D Secure checkout</p>
+    <h1>{% if event %}{{ event.name }}{% else %}No event yet{% endif %}</h1>
+    <p class="lead">{% if event %}{{ event.venue }} · pick seats, pay, then try refreshing during the bank challenge or pressing Pay twice. You can only ever be charged once.{% else %}Run <code>python manage.py seed_demo</code> to create the demo event.{% endif %}</p>
+    {% if event %}
+    <div class="grid">
+      <section class="card" aria-labelledby="seat-title">
+        <h2 id="seat-title" class="eyebrow" style="color:var(--muted)">Choose seats</h2>
+        <div class="stage">STAGE</div>
+        <div class="seats" id="seats" role="group" aria-label="Seats"></div>
+      </section>
+      <section class="card" aria-labelledby="pay-title">
+        <h2 id="pay-title" class="eyebrow" style="color:var(--muted)">Your order</h2>
+        <div class="row"><span class="muted">Seats</span><span id="sel">None</span></div>
+        <div class="row"><span class="muted">Total</span><span id="total">£0.00</span></div>
+        <label for="email">Email</label>
+        <input id="email" type="email" value="buyer@example.com" autocomplete="email">
+        <label for="card">Test card</label>
+        <select id="card">
+          <option value="challenge">Bank asks for 3D Secure challenge</option>
+          <option value="frictionless">Frictionless approval</option>
+          <option value="decline">Declined</option>
+        </select>
+        <button class="btn" id="pay" type="button">Pay</button>
+        <div id="status" class="status" role="status" hidden></div>
+        <ol class="log" id="log" aria-label="Event log"></ol>
+      </section>
+    </div>
+    {% endif %}
+  </main>
+  {% if event %}
+  <script>
+    const EVENT_ID = {{ event.id }}, PRICE = {{ event.price_cents }};
+    let orderId = "{{ order_id }}" || sessionStorage.getItem("orderId") || "";
+    const picked = new Set();
+    const $ = (id) => document.getElementById(id);
+    const log = (msg) => { const li = document.createElement("li"); li.textContent = msg; $("log").prepend(li); };
+    const show = (msg, kind = "") => { const s = $("status"); s.hidden = false; s.className = `status ${kind}`; s.textContent = msg; };
+
+    async function api(path, opts = {}) {
+      // Spread opts first so the merged headers (JSON content type + any extras) always win
+      const res = await fetch(path, { ...opts, headers: { "content-type": "application/json", ...(opts.headers || {}) } });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || body.detail || "Something went wrong. Please try again.");
+      return body;
+    }
+
+    async function loadSeats() {
+      const event = await api(`/api/events/${EVENT_ID}/`);
+      $("seats").replaceChildren(...event.seats.map((s) => {
+        const b = document.createElement("button");
+        b.className = "seat"; b.type = "button"; b.textContent = s.label;
+        b.disabled = s.status !== "available"; b.setAttribute("aria-pressed", picked.has(s.label));
+        b.setAttribute("aria-label", `Seat ${s.label}, ${s.status}`);
+        b.onclick = () => { picked.has(s.label) ? picked.delete(s.label) : picked.add(s.label); render(); b.setAttribute("aria-pressed", picked.has(s.label)); };
+        return b;
+      }));
+    }
+    function render() {
+      $("sel").textContent = [...picked].sort().join(", ") || "None";
+      $("total").textContent = `£${(PRICE * picked.size / 100).toFixed(2)}`;
+    }
+
+    function describe(order) {
+      const p = order.payment;
+      if (order.status === "paid") return show(`Paid · seats ${order.seats.join(", ")} are yours.`, "ok");
+      if (order.status === "requires_action" && p?.challenge_url) return show("Waiting for your bank's 3D Secure challenge…");
+      if (["failed", "expired"].includes(order.status)) { sessionStorage.removeItem("orderId"); return show(`Order ${order.status}. Seats were released.`, "err"); }
+      show(`Order ${order.status}…`);
+    }
+
+    async function poll() {
+      // Resumable: after a refresh or the bank redirect, read state from the server until it settles
+      for (let i = 0; i < 20 && orderId; i++) {
+        const order = await api(`/api/orders/${orderId}/`);
+        describe(order);
+        if (!["pending", "requires_action"].includes(order.status) || !order.payment) return loadSeats();
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+    }
+
+    $("pay").onclick = async () => {
+      $("pay").disabled = true;
+      try {
+        if (!orderId) {
+          if (!picked.size) throw new Error("Pick at least one seat.");
+          // Same key on retry -> same order, never a duplicate hold
+          const key = sessionStorage.getItem("idemKey") || crypto.randomUUID();
+          sessionStorage.setItem("idemKey", key);
+          const order = await api("/api/orders/", { method: "POST", headers: { "Idempotency-Key": key }, body: JSON.stringify({ event_id: EVENT_ID, seats: [...picked], email: $("email").value }) });
+          orderId = order.id; sessionStorage.setItem("orderId", orderId); sessionStorage.removeItem("idemKey");
+          log(`Seats held: ${order.seats.join(", ")} until ${new Date(order.expires_at).toLocaleTimeString()}`);
+        }
+        const order = await api(`/api/orders/${orderId}/pay/`, { method: "POST", body: JSON.stringify({ card: $("card").value }) });
+        log(`Payment ${order.payment?.status}`);
+        describe(order);
+        if (order.status === "requires_action" && order.payment?.challenge_url) {
+          log("Redirecting to the bank challenge…");
+          setTimeout(() => (location.href = order.payment.challenge_url), 600);
+        } else poll();
+      } catch (e) { show(e.message, "err"); log(`Error: ${e.message}`); }
+      finally { $("pay").disabled = false; }
+    };
+
+    loadSeats().then(() => { if (orderId) { log("Resuming your order…"); poll(); } });
+  </script>
+  {% endif %}
+</body>
+</html>
